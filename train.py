@@ -162,7 +162,7 @@ def freeze_encoder(model):
     print(f"  Trainable parameters: {trainable:,} / {total:,} ({100*trainable/total:.1f}%)")
 
 
-def train_one_epoch(model, dataloader, optimizer, bce_loss_fn):
+def train_one_epoch(model, dataloader, optimizer, bce_loss_fn, scaler=None):
     """Train for one epoch."""
     model.train()
     total_loss = 0
@@ -201,9 +201,16 @@ def train_one_epoch(model, dataloader, optimizer, bce_loss_fn):
 
         # Backward pass
         optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        optimizer.step()
+        if scaler is not None:
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
 
         # Metrics
         with torch.no_grad():
@@ -216,9 +223,6 @@ def train_one_epoch(model, dataloader, optimizer, bce_loss_fn):
         n_batches += 1
 
         pbar.set_postfix(loss=f"{loss.item():.4f}", dice=f"{d:.4f}")
-
-        if n_batches >= 20:  # LIMIT BATCHES FOR TIME CONSTRAINTS
-            break
 
     return {
         "loss": total_loss / n_batches,
@@ -363,7 +367,8 @@ def main():
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=0,
+        num_workers=os.cpu_count() if DEVICE.type != "mps" else 0,
+        pin_memory=(DEVICE.type != "cpu"),
         collate_fn=custom_collate_fn,
         drop_last=True,
     )
@@ -371,7 +376,8 @@ def main():
         val_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=0,
+        num_workers=os.cpu_count() if DEVICE.type != "mps" else 0,
+        pin_memory=(DEVICE.type != "cpu"),
         collate_fn=custom_collate_fn,
     )
 
@@ -385,6 +391,7 @@ def main():
         optimizer, T_max=args.epochs, eta_min=1e-6
     )
     bce_loss_fn = nn.BCEWithLogitsLoss()
+    scaler = torch.amp.GradScaler(device='cuda') if DEVICE.type == "cuda" else None
 
     # Training loop
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
@@ -399,7 +406,7 @@ def main():
         print(f"\nEpoch {epoch}/{args.epochs} (lr={optimizer.param_groups[0]['lr']:.6f})")
 
         # Train
-        train_metrics = train_one_epoch(model, train_loader, optimizer, bce_loss_fn)
+        train_metrics = train_one_epoch(model, train_loader, optimizer, bce_loss_fn, scaler)
         history["train_loss"].append(train_metrics["loss"])
         history["train_dice"].append(train_metrics["dice"])
         history["train_iou"].append(train_metrics["iou"])
