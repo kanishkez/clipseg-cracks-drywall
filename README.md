@@ -41,9 +41,19 @@ Evaluations were performed on the validation set.
 | drywall  | segment joint/tape     | 0.1411 | 0.2319 | 202 |
 | drywall  | segment drywall seam   | 0.1891 | 0.3007 | 202 |
 
-**Overall Mean mIoU**: 0.2707 | **Overall Mean mDice**: 0.3806
-
 *Visual examples generated across datasets are saved in `results/visualizations/`.*
+
+### Example Visualizations (Orig | GT | Pred)
+Here is how the model performed on the validation set during a rapid, 2-epoch run:
+
+**Crack Detection**
+![Crack Example 1](results/visualizations/cracks/vis_1045-dat_png_jpg.rf.57f60467a0df171f05570845b0355a0c.png)
+![Crack Example 2](results/visualizations/cracks/vis_1120-dat_png_jpg.rf.415d76182f1ec38f7949c18c273ef0e3.png)
+
+**Drywall Seam Detection**
+![Drywall Example 1](results/visualizations/drywall/vis_2000x1500_0_resized_jpg.rf.5ea90002e5c5e1cc2c092efe44e966cf.png)
+![Drywall Example 2](results/visualizations/drywall/vis_2000x1500_15_resized_jpg.rf.22fc3512deed0691f3c2698aa76e7f0b.png)
+
 
 ### Footprint & Runtime
 - **Model Size**: Base model contains ~150M parameters, with only 1.12M trainable parameters (frozen encoder).
